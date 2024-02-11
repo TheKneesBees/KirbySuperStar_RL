@@ -77,6 +77,8 @@ if __name__ == "__main__":
     memory.add_address(0x00BB) #Kirby's Health
     memory.add_address(0x00B9) #Life count
 
+    memory.add_address(0xaa) #Song Playing
+
 
     #Pair of addresses help determine sub game being played
     memory.add_address(0x0645)
@@ -101,7 +103,7 @@ if __name__ == "__main__":
         # Send requests, parse responses, and advance the emulator to the next frame.
         gameState.memory_reader(memory.get_memory())
         client.advance_frame()
-        time.sleep(1)
+        # time.sleep(.05)
 
         print(
             "Frame:" \
@@ -115,5 +117,13 @@ if __name__ == "__main__":
         print(memory.get_memory())
         print(sub_game_current(memory.get_memory().get('0x645'), memory.get_memory().get('0x1778')))
         print(gameState.print_memory())
+        if gameState.song == 12:
+            print("He's done for...")
+        elif gameState.song == 1:
+            print("Level COmpleted")
+        elif gameState.song == 9 or gameState.song == 10:
+            print("look at him dance")
+        elif gameState.song == 5:
+            print("Why do I hear Boss Music")
 
     print("Could not connect to external tool :[")
