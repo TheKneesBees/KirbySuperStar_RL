@@ -5,3 +5,4 @@ class memoryRegisters(Enum):
     Health = '0xbb'
     Subgame1 = '0x645'
     Subgame2 = '0x1778'
+    Song = '0xaa'
