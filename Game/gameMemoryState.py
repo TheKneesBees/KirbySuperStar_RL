@@ -1,15 +1,19 @@
 import birdseyelib as bird
-
+from Game import memoryRegisters
 class gameMemoryState:
+   
     def __init__(self):
         self.lives = 0
         self.health = 0
         self.subgame = "Menu"
+        self.registers = memoryRegisters.memoryRegisters
+        
 
     def memory_reader(self, memory):
-        self.lives = memory.get('0xb9', 0)
-        self.health = memory.get('0xbb', 0)
-        self.subgame = self.subgame_current(memory.get('0x645'), memory.get('0x1778'))
+        print(self.registers.Lives)
+        self.lives = memory.get(self.registers.Lives.value, 0)
+        self.health = memory.get(self.registers.Health.value, 0)
+        self.subgame = self.subgame_current(memory.get(self.registers.Subgame1.value), memory.get(self.registers.Subgame2.value))
 
     def subgame_current(self, mem1, mem2):
         match mem1, mem2:
