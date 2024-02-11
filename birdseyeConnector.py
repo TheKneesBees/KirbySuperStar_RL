@@ -1,4 +1,6 @@
 import birdseyelib as bird
+import time
+from Game import gameMemoryState
 
 HOST = ""
 
@@ -39,8 +41,25 @@ class SNESControllerInput(bird.ControllerInput):
                            bool_to_string[start] + ";" + bool_to_string[select]
         self.client._queue_request("INPUT;" + controller_input + "\n")
 
+def sub_game_current(mem1, mem2):
+    match mem1, mem2:
+        case 67, 36:
+            return "Spring Breeze"
+        case 69, 12:
+            return "Gourmet Race"
+        case 57, _: 
+            return "Dynablade"
+        case 0, 140:
+            return "Great Cave Offensive"
+        case 35, 4:
+            return "Revenge of Meta Knight"
+        case 24, 140:
+            return "Milky Way Wishes"
+        
 if __name__ == "__main__":
     client = bird.Client(HOST, PORT)
+
+    gameState = gameMemoryState.gameMemoryState()
 
     memory = bird.Memory(client)
     controller_input = SNESControllerInput(client)
@@ -52,8 +71,17 @@ if __name__ == "__main__":
     print("Connecting to server at {} on port {}.".format(HOST, PORT))
 
     # Add some arbitrary addresses to read from.
-    memory.add_address(0x0057)
-    memory.add_address_range(0x0087, 0x008B)
+    # memory.add_address(0x0057)
+    # memory.add_address_range(0x0087, 0x008B)
+
+    memory.add_address(0x00BB) #Kirby's Health
+    memory.add_address(0x00B9) #Life count
+
+
+    #Pair of addresses help determine sub game being played
+    memory.add_address(0x0645)
+    memory.add_address(0x1778)
+
 
     count = 0
     
@@ -71,7 +99,9 @@ if __name__ == "__main__":
         emulation.request_framecount()
 
         # Send requests, parse responses, and advance the emulator to the next frame.
+        gameState.memory_reader(memory.get_memory())
         client.advance_frame()
+        time.sleep(1)
 
         print(
             "Frame:" \
@@ -80,5 +110,10 @@ if __name__ == "__main__":
                 ":".join([str(addr), str(data)]) for addr, data in memory.get_memory().items()
             ])
         )
+        for addr, data in memory.get_memory().items():
+            print(type(addr))
+        print(memory.get_memory())
+        print(sub_game_current(memory.get_memory().get('0x645'), memory.get_memory().get('0x1778')))
+        print(gameState.print_memory())
 
     print("Could not connect to external tool :[")
