@@ -3,8 +3,9 @@ import sys
 import os
 sys.path.append("C:\\Users\\aaron\\Documents\\Projects\\birds-eye")
 import birdseyelib as bird
-from Game import gameMemoryState, SNESControllerInput, inputSpace
+from Game import gameState, inputSpace
 import random
+from pynput.keyboard import Key, Controller
 
 HOST = ""
 
@@ -31,16 +32,20 @@ def sub_game_current(mem):
 if __name__ == "__main__":
     client = bird.Client(HOST, PORT)
 
-    gameState = gameMemoryState.gameMemoryState()
+    gameState = gameState.gameState()
     possibleInputs = inputSpace.InputSpace()
 
     memory = bird.Memory(client)
     emuClient = bird.EmuClient(client)
-    path = "C:\\Users\\aaron\\Documents\\Projects\\KirbySuperStar_RL\\CurrentFrame.jpg"
+    path = "C:\\Users\\aaron\\Documents\\Projects\\KirbySuperStar_RL\\CurrentFrame.png"
     emuClient.setPath(path)
     controller_input = bird.ControllerInput(client)
+    saveState = bird.SaveState(client)
     emulation = bird.Emulation(client)
+    joypad = bird.Joypad(client)
     external_tool = bird.ExternalTool(client)
+
+    keyboard = Controller()
 
     # This will block until a connection is established.
     client.connect()
@@ -71,7 +76,7 @@ if __name__ == "__main__":
     print(memory.get_memory_domains())
 
     count = 0
-    
+    total_reward = 0
     while client.is_connected():
         
         # Queueing requests to the external tool.
@@ -80,7 +85,7 @@ if __name__ == "__main__":
         memory.request_BWRAM_memory()
         
         # Send requests, parse responses, and advance the emulator to the next frame.
-        gameState.memory_reader(memory.get_IRAM_memory(), memory.get_BWRAM_memory())
+        reward = gameState.calc_reward(memory.get_IRAM_memory(), memory.get_BWRAM_memory())
 
         print(
             "Frame: " \
@@ -111,14 +116,16 @@ if __name__ == "__main__":
         select = False
         up = chosenInput[8]
         down = chosenInput[9]
-        left = chosenInput[10]
-        right = chosenInput[11]
+        right = chosenInput[10]
+        left = chosenInput[11]
 
         # if(emulation.get_framecount() >= count + 120):
         controller_input.set_controller_input(a, b, x, y, l, r, up, down, right, left, start, select)
         count = emulation.get_framecount()
-        if count % 300 == 0:
-            emuClient.requestScreenshot()
+        emuClient.requestScreenshot()
+        if gameState.reset == True:
+            keyboard.press(Key.f10)
+            keyboard.release(Key.f10)
 
         # else:
         #     controller_input.set_controller_input()
@@ -139,6 +146,11 @@ if __name__ == "__main__":
             print("look at him dance")
         elif gameState.song == 5:
             print("Why do I hear Boss Music")
+        
+        print(reward)
+        total_reward += reward
+        print(total_reward)
+        print(gameState.reset)
 
         
     print("Could not connect to external tool :[")
