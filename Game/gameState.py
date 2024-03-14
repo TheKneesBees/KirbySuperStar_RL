@@ -18,6 +18,7 @@ class gameState:
         self.reset = False
         self.level_clear = False
         self.dying = False
+        self.game_clear = False
         
 
     def calc_reward(self, IRAM_memory, BWRAM_memory):
@@ -58,6 +59,7 @@ class gameState:
             '''
             Reward calc for spring breeze
             '''
+            self.game_clear = False
             if room_id > self.room_id:
                 reward += room_id - self.room_id
             
@@ -69,7 +71,7 @@ class gameState:
                 self.boss_active = True
             
             if self.boss_active:
-                if boss_current_health < self.boss_current_health:
+                if boss_current_health < self.boss_current_health and self.boss_max_health > 0:
                     reward += 1+ (self.boss_current_health - boss_current_health)/self.boss_max_health
                 
                 if boss_current_health == 0 or boss_current_health == 65535:
@@ -103,6 +105,7 @@ class gameState:
                 if not self.reset:
                     reward += 1000
                     self.reset = True
+                    self.game_clear = True
             
             if self.reset:
                 if lives == 3 and song == 15:

@@ -1,12 +1,17 @@
 import time
 import sys
-import os
+
 sys.path.append("C:\\Users\\aaron\\Documents\\Projects\\birds-eye")
 import birdseyelib as bird
 from Game import gameState, inputSpace
 import random
 from pynput.keyboard import Key, Controller
-
+from pathlib import Path
+import random, datetime, os
+from DeepKirby import DeepKirby
+from PIL import Image, ImageOps
+from MetricLogger import MetricLogger
+import torchvision.transforms as transforms
 HOST = ""
 
 HOST = "127.0.0.1"
@@ -77,6 +82,16 @@ if __name__ == "__main__":
 
     count = 0
     total_reward = 0
+
+    save_dir = Path("checkpoints") / datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    save_dir.mkdir(parents=True)
+    first_frame = 0
+
+    kirby = DeepKirby(state_dim=(1, 224, 256), action_dim=38, save_dir=save_dir)
+    episodes = 30
+    episodes_passed = 0
+    logger = MetricLogger(save_dir)
+    prev_state = None
     while client.is_connected():
         
         # Queueing requests to the external tool.
@@ -84,8 +99,12 @@ if __name__ == "__main__":
         memory.request_IRAM_memory()
         memory.request_BWRAM_memory()
         
+        frame = emulation.request_framecount()
         # Send requests, parse responses, and advance the emulator to the next frame.
         reward = gameState.calc_reward(memory.get_IRAM_memory(), memory.get_BWRAM_memory())
+        if first_frame == 0:
+            first_frame = frame
+        
 
         print(
             "Frame: " \
@@ -102,10 +121,25 @@ if __name__ == "__main__":
                 ":".join([str(addr), str(data)]) for addr, data in memory.get_BWRAM_memory().items()
             ])
         )
+        emuClient.requestScreenshot()
+        im1 = Image.open("CurrentFrame.png")
+        im2 = ImageOps.grayscale(im1)
+        transform = transforms.Compose([transforms.PILToTensor()])
+        state = transform(im2)
+        state = state / 255
 
+        if prev_state is not None:
+            kirby.cache(prev_state, state, action, reward, gameState.game_clear)
+
+        action = kirby.act(state)
+        
+        q, loss = kirby.learn()
+
+        logger.log_step(reward, loss, q)
         # Controller input requests will have no effect
         # until the external tool is set to Commandeer Mode.   
-        chosenInput = random.choice(list(possibleInputs.possibleInputs.values()))
+        chosenInput = possibleInputs.possibleInputs.get(action)
+
         a = chosenInput[0]
         b = chosenInput[1]
         x = chosenInput[2]
@@ -122,35 +156,40 @@ if __name__ == "__main__":
         # if(emulation.get_framecount() >= count + 120):
         controller_input.set_controller_input(a, b, x, y, l, r, up, down, right, left, start, select)
         count = emulation.get_framecount()
-        emuClient.requestScreenshot()
+        
         if gameState.reset == True:
             keyboard.press(Key.f10)
             keyboard.release(Key.f10)
+            episodes_passed += 1
+            logger.log_episode()
+        
+        if episodes_passed == episodes:
+            break
 
         # else:
         #     controller_input.set_controller_input()
         emulation.request_framecount()
-        
+        prev_state = state
         client.advance_frame()
 
         
 
         # print(memory.get_memory())
-        print(memory.get_memory().get('0x2ea') , " sub_game: " + sub_game_current(memory.get_IRAM_memory().get('0x2ea')))
-        print(gameState.print_memory())
-        if gameState.song == 12:
-            print("He's done for...")
-        elif gameState.song == 1:
-            print("Level COmpleted")
-        elif gameState.song == 9 or gameState.song == 10:
-            print("look at him dance")
-        elif gameState.song == 5:
-            print("Why do I hear Boss Music")
+        # print(memory.get_memory().get('0x2ea') , " sub_game: " + sub_game_current(memory.get_IRAM_memory().get('0x2ea')))
+        # print(gameState.print_memory())
+        # if gameState.song == 12:
+        #     print("He's done for...")
+        # elif gameState.song == 1:
+        #     print("Level COmpleted")
+        # elif gameState.song == 9 or gameState.song == 10:
+        #     print("look at him dance")
+        # elif gameState.song == 5:
+        #     print("Why do I hear Boss Music")
         
-        print(reward)
-        total_reward += reward
-        print(total_reward)
-        print(gameState.reset)
+        # print(reward)
+        # total_reward += reward
+        # print(total_reward)
+        # print(gameState.reset)
 
         
     print("Could not connect to external tool :[")
