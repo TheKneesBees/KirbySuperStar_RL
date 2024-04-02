@@ -12,6 +12,8 @@ from DeepKirby import DeepKirby
 from PIL import Image, ImageOps
 from MetricLogger import MetricLogger
 import torchvision.transforms as transforms
+import torch 
+
 HOST = ""
 
 HOST = "127.0.0.1"
@@ -70,6 +72,8 @@ if __name__ == "__main__":
     memory.add_address(0x137C, "SA1 BWRAM") #Kirby health
     memory.add_address_range(0x1A1B, 0x1A1C, "SA1 BWRAM") #Boss's Current health bytes 2 and 1, defaults to value FFFF if no boss/miniboss is present 
     memory.add_address_range(0x1A1D, 0x1A1E, "SA1 BWRAM") #Boss max health bytes 2 and 1
+    memory.add_address_range(0x988, 0x989, "SA1 BWRAM") #Kirby's X Position Bytes 2 and 1
+    memory.add_address_range(0xA02, 0xA03, "SA1 BWRAM") #Kirby's Y Position Bytes 2 and 1 (Y position 0 is at the top of the room)
     
     #SA1 IRAM Memory Values
     memory.add_address(0x2EA, "SA1 IRAM") #Current subgame
@@ -78,7 +82,7 @@ if __name__ == "__main__":
     memory.add_address(0x2F2, "SA1 IRAM") #Room ID within current level, resets to 0 after clearing a level (e.g. Beating green greens and starting float island in spring breeze)
 
     memory.request_domains()
-    print(memory.get_memory_domains())
+    # print(memory.get_memory_domains())
 
     count = 0
     total_reward = 0
@@ -92,42 +96,58 @@ if __name__ == "__main__":
     episodes_passed = 0
     logger = MetricLogger(save_dir)
     prev_state = None
+    commandeered = False
+    explore_timer = 0
+    timeout = 60 * 180
+
+    keyboard.press(Key.f10)
+    keyboard.release(Key.f10)
+
+    
     while client.is_connected():
-        
+
         # Queueing requests to the external tool.
         # memory.add_address(0x2EA) #Current subgame IRAM
+        if not commandeered:
+            external_tool.set_commandeer(True)
+            commandeered = True
+
         memory.request_IRAM_memory()
         memory.request_BWRAM_memory()
         
         frame = emulation.request_framecount()
         # Send requests, parse responses, and advance the emulator to the next frame.
-        reward = gameState.calc_reward(memory.get_IRAM_memory(), memory.get_BWRAM_memory())
+        
         if first_frame == 0:
             first_frame = frame
         
 
-        print(
-            "Frame: " \
-            + str(emulation.get_framecount()) + ": SA1 IRAM: " \
-            + " ".join([
-                ":".join([str(addr), str(data)]) for addr, data in memory.get_IRAM_memory().items()
-            ])
-        )
+        # print(
+        #     "Frame: " \
+        #     + str(emulation.get_framecount()) + ": SA1 IRAM: " \
+        #     + " ".join([
+        #         ":".join([str(addr), str(data)]) for addr, data in memory.get_IRAM_memory().items()
+        #     ])
+        # )
 
-        print(
-            "Frame: " \
-            + str(emulation.get_framecount()) + ": SA1 BWRAM: " \
-            + " ".join([
-                ":".join([str(addr), str(data)]) for addr, data in memory.get_BWRAM_memory().items()
-            ])
-        )
+        # print(
+        #     "Frame: " \
+        #     + str(emulation.get_framecount()) + ": SA1 BWRAM: " \
+        #     + " ".join([
+        #         ":".join([str(addr), str(data)]) for addr, data in memory.get_BWRAM_memory().items()
+        #     ])
+        # )
+            
         emuClient.requestScreenshot()
         im1 = Image.open("CurrentFrame.png")
         im2 = ImageOps.grayscale(im1)
         transform = transforms.Compose([transforms.PILToTensor()])
         state = transform(im2)
         state = state / 255
+        state = state.to(torch.float16)
 
+        reward = gameState.calc_reward(memory.get_IRAM_memory(), memory.get_BWRAM_memory())
+        
         if prev_state is not None:
             kirby.cache(prev_state, state, action, reward, gameState.game_clear)
 
@@ -157,11 +177,16 @@ if __name__ == "__main__":
         controller_input.set_controller_input(a, b, x, y, l, r, up, down, right, left, start, select)
         count = emulation.get_framecount()
         
-        if gameState.reset == True:
+        if gameState.reset == True or (explore_timer == timeout and not gameState.boss_active):
             keyboard.press(Key.f10)
             keyboard.release(Key.f10)
             episodes_passed += 1
             logger.log_episode()
+            explore_timer = 0
+            gameState.new_episode()
+            if episodes_passed % 3 == 0 or episodes_passed == episodes - 1:
+                logger.record(episode=episodes_passed, epsilon=kirby.exploration_rate, step=kirby.curr_step)
+            print(f'Episodes Passed: {episodes_passed}')
         
         if episodes_passed == episodes:
             break
@@ -171,7 +196,9 @@ if __name__ == "__main__":
         emulation.request_framecount()
         prev_state = state
         client.advance_frame()
-
+        explore_timer += 1
+        print(explore_timer)
+        # print(f'Total Reward: {gameState.total_reward}')
         
 
         # print(memory.get_memory())
@@ -190,6 +217,5 @@ if __name__ == "__main__":
         # total_reward += reward
         # print(total_reward)
         # print(gameState.reset)
-
         
     print("Could not connect to external tool :[")

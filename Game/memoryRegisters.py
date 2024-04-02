@@ -12,3 +12,7 @@ class memoryRegisters(Enum):
     Boss_current_health_1 = '0x1a1c'
     Boss_current_health_2 = '0x1a1b'
     Room_id = '0x2f2'
+    Kirby_X_1 = '0x989'
+    Kirby_X_2 = '0x988'
+    Kirby_Y_1 = '0xa03'
+    Kirby_Y_2 = '0xa02'

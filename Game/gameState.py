@@ -19,6 +19,11 @@ class gameState:
         self.level_clear = False
         self.dying = False
         self.game_clear = False
+        self.total_reward = 0
+        self.reward = 0
+        self.x_position = 0
+        self.y_position = 0
+        self.visited_coord = set()
         
 
     def calc_reward(self, IRAM_memory, BWRAM_memory):
@@ -32,6 +37,8 @@ class gameState:
         subgame = self.subgame_current(IRAM_memory.get(self.registers.Subgame.value))
         boss_current_health = BWRAM_memory.get(self.registers.Boss_current_health_1.value) * 256 + BWRAM_memory.get(self.registers.Boss_current_health_2.value)
         boss_max_health = BWRAM_memory.get(self.registers.Boss_max_health_1.value) * 256 + BWRAM_memory.get(self.registers.Boss_max_health_2.value)
+        kirby_x = BWRAM_memory.get(self.registers.Kirby_X_1.value) * 256 + BWRAM_memory.get(self.registers.Kirby_X_2.value)
+        kirby_y = BWRAM_memory.get(self.registers.Kirby_Y_1.value) * 256 + BWRAM_memory.get(self.registers.Kirby_Y_2.value)
         room_id = IRAM_memory.get(self.registers.Room_id.value)
         song = IRAM_memory.get(self.registers.Song.value) #Tracking to see if song 12 plays for kirby dying.
         '''
@@ -63,6 +70,13 @@ class gameState:
             if room_id > self.room_id:
                 reward += room_id - self.room_id
             
+            if room_id != self.room_id:
+                self.visited_coord.clear()
+            
+            elif (kirby_x, kirby_y) not in self.visited_coord:
+                reward += 0.0001
+                self.visited_coord.add((kirby_x, kirby_y))
+            
             if self.copy_ability == 0:
                 if copy_ability != 0:
                     reward += 0.5
@@ -82,7 +96,7 @@ class gameState:
             if kirby_health < self.kirby_health:
                 reward -= (self.kirby_health - kirby_health)/70
 
-            if kirby_health > self.kirby_health:
+            if kirby_health > self.kirby_health and not self.dying:
                 reward += (kirby_health - self.kirby_health)/70
 
             if song == 12:
@@ -110,8 +124,6 @@ class gameState:
             if self.reset:
                 if lives == 3 and song == 15:
                     self.reset = False
-            
-            
 
 
         self.lives = lives
@@ -123,6 +135,10 @@ class gameState:
         self.room_id = room_id
         self.song = song
         self.sound = sound
+        self.reward = reward
+        self.total_reward += reward
+        self.x_position = kirby_x
+        self.y_position = kirby_y
         return reward
 
     def subgame_current(self, mem):
@@ -205,6 +221,10 @@ class gameState:
             case _:
                 return "Normal"
             
+    def new_episode(self):
+        self.visited_coord.clear()
+        self.total_reward = 0
+
     def print_memory(self):
         '''
         Outputs the data for debugging
@@ -217,6 +237,8 @@ class gameState:
             + "\n Sound: " + str(self.sound) \
             + "\n Boss Current Health: " + str(self.boss_current_health) \
             + "\n Boss Max Health: " + str(self.boss_max_health) \
-            + "\n Room ID: " + str(self.room_id)
+            + "\n Room ID: " + str(self.room_id) \
+            + "\n Kirby X Coordinate: " + str(self.x_position) \
+            + "\n Kirby Y Coordinate: "  + str(self.y_position)
         return output
 
